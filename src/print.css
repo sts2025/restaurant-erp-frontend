@@ -1,0 +1,60 @@
+@media print {
+
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+
+  /* Hide everything */
+  body * {
+    display: none !important;
+  }
+
+  /* CUSTOMER RECEIPT */
+  body.print-receipt #receipt-print,
+  body.print-receipt #receipt-print * {
+    display: block !important;
+  }
+
+  /* KITCHEN TICKET */
+  body.print-kitchen #kitchen-ticket,
+  body.print-kitchen #kitchen-ticket * {
+    display: block !important;
+  }
+
+  /* Position Receipt */
+  body.print-receipt #receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    background: white;
+  }
+
+  /* Position Kitchen Ticket */
+  body.print-kitchen #kitchen-ticket {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    background: white;
+    font-family: monospace;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    display: none !important;
+  }
+
+  * {
+    box-shadow: none !important;
+  }
+}

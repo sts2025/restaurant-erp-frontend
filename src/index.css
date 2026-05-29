@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@media print {
+  body * { visibility: hidden !important; }
+  #receipt-print-area, #receipt-print-area * { 
+    visibility: visible !important; 
+    display: block !important;
+  }
+  #receipt-print-area { 
+    position: absolute; 
+    left: 0 !important; 
+    top: 0 !important; 
+    width: 280px !important; /* Standard thermal width */
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}

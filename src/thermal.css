@@ -1,0 +1,111 @@
+/**
+ * THERMAL PRINT STYLES
+ */
+
+@media print {
+
+  body {
+
+    margin: 0;
+
+    padding: 0;
+
+    background: white;
+
+  }
+
+  .thermal-report {
+
+    width: 80mm;
+
+    font-family:
+      monospace;
+
+    font-size: 12px;
+
+    color: black;
+
+    padding: 4mm;
+
+  }
+
+  .thermal-hide {
+
+    display: none !important;
+
+  }
+
+  .thermal-center {
+
+    text-align: center;
+
+  }
+
+  .thermal-divider {
+
+    border-top:
+      1px dashed black;
+
+    margin:
+      6px 0;
+
+  }
+
+  .thermal-row {
+
+    display: flex;
+
+    justify-content:
+      space-between;
+
+    gap: 10px;
+
+  }
+
+  .thermal-small {
+
+    font-size: 10px;
+
+  }
+
+  .thermal-bold {
+
+    font-weight: bold;
+
+  }
+
+  .thermal-section {
+
+    margin-top: 10px;
+
+  }
+
+  .thermal-table {
+
+    width: 100%;
+
+    border-collapse: collapse;
+
+  }
+
+  .thermal-table td {
+
+    padding: 2px 0;
+
+    vertical-align: top;
+
+  }
+  /**
+ * SHIFT REPORT
+ */
+body.print-shift
+.thermal-report,
+
+body.print-shift
+.thermal-report * {
+
+  visibility: visible;
+
+}
+
+}
