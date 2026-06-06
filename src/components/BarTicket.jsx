@@ -1,24 +1,23 @@
 import { useEffect } from 'react';
 
-export default function KitchenTicket({ receipt }) {
+export default function BarTicket({ receipt }) {
 
   if (!receipt) return null;
 
   /**
-   * ONLY KITCHEN ITEMS
+   * ONLY BAR ITEMS
    */
-  const kitchenItems =
-    receipt.items?.filter(
-      item =>
-        item.product?.preparation_area ===
-        'kitchen'
-    ) || [];
+  const barItems =
+  receipt.items?.filter(
+    item =>
+      item.product?.preparation_area === 'bar'
+  ) || [];
 
   /**
    * DON'T PRINT IF THERE ARE NO
-   * KITCHEN ITEMS
+   * BAR ITEMS
    */
-  if (kitchenItems.length === 0) {
+  if (barItems.length === 0) {
     return null;
   }
 
@@ -26,33 +25,25 @@ export default function KitchenTicket({ receipt }) {
   useEffect(() => {
 
   console.log(
-    "KITCHEN RECEIPT",
+    "BAR RECEIPT",
     receipt
   );
 
-  receipt?.items?.forEach(item => {
-
-    console.log(
-      item.product?.name,
-      item.product?.preparation_area
-    );
-
-  });
-
 }, [receipt]);
+
   /**
-   * PRINT KITCHEN TICKET
+   * PRINT BAR TICKET
    */
-  const printKitchenTicket = () => {
+  const printBarTicket = () => {
 
     const content =
      document.getElementById(
-  `kitchen-print-${receipt.id}`
+  `bar-print-${receipt.id}`
 )?.innerHTML;
 
     if (!content) {
       console.error(
-        'Kitchen content not found'
+        'Bar content not found'
       );
       return;
     }
@@ -69,7 +60,7 @@ export default function KitchenTicket({ receipt }) {
 
         <head>
 
-          <title>Kitchen Order</title>
+          <title>Bar Order</title>
 
           <style>
 
@@ -155,7 +146,7 @@ export default function KitchenTicket({ receipt }) {
 
     const timer = setTimeout(() => {
 
-      printKitchenTicket();
+      printBarTicket();
 
     }, 1500);
 
@@ -166,16 +157,16 @@ export default function KitchenTicket({ receipt }) {
   return (
 
     <div
-      id={`kitchen-print-${receipt.id}`}
+      id={`bar-print-${receipt.id}`}
       style={{ display: 'none' }}
     >
 
       <h1>
-        KITCHEN ORDER
+        BAR ORDER
       </h1>
 
       <h2>
-        PREPARE NOW
+        PREPARE DRINKS
       </h2>
 
       <div className="line"></div>
@@ -215,7 +206,7 @@ export default function KitchenTicket({ receipt }) {
 
       <div className="line"></div>
 
-      {kitchenItems.map(item => (
+      {barItems.map(item => (
 
         <div
           key={item.id}
@@ -252,7 +243,7 @@ export default function KitchenTicket({ receipt }) {
 
       <div className="center">
         <strong>
-          SEND TO CHEF
+          SEND TO BARTENDER
         </strong>
       </div>
 

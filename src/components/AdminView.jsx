@@ -5,7 +5,8 @@ import {
   Box, Receipt, Users, Printer, TrendingUp, Calendar, 
   Search, X, Download, RefreshCw, AlertCircle, DollarSign,
   PieChart, Settings, Trash2, Edit2, Eye, Clock, Award,
-  UserCircle, CreditCard, AlertTriangle, ClipboardList, FileText
+  UserCircle, CreditCard, AlertTriangle, ClipboardList, FileText,
+  Building
 } from 'lucide-react';
 import SaleDetailsModal from './SaleDetailsModal';
 import SalesHistory from './SalesHistory';
@@ -38,6 +39,18 @@ export default function AdminView() {
     date: new Date().toISOString().split('T')[0]
   });
   
+  // STOCK MOVEMENTS STATE
+  const [stockMovements, setStockMovements] = useState([]);
+  
+  // BRANCHES STATE
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [newBranch, setNewBranch] = useState({
+    name: '',
+    location: '',
+    phone: ''
+  });
+  
   // FILTER STATES
   const [fromDate, setFromDate] = useState(new Date().toISOString().split('T')[0]);
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
@@ -63,14 +76,16 @@ export default function AdminView() {
   const [cashierReport, setCashierReport] = useState([]);
   const [showVoidConfirm, setShowVoidConfirm] = useState(null);
 
-  // STEP 3: Z-REPORT STATE
+  // Z-REPORT STATE
   const [zReport, setZReport] = useState(null);
 
   const [stockUpdate, setStockUpdate] = useState({
     product_id: '',
-    quantity: ''
+    quantity: '',
+    type: 'in',
+    reason: ''
   });
-
+  
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
@@ -108,6 +123,26 @@ export default function AdminView() {
   // FETCH FUNCTIONS
   // =========================
   
+  // Load Branches
+  const loadBranches = async () => {
+    try {
+      const res = await axios.get('/branches');
+      setBranches(res.data.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Fetch Stock Movements
+  const fetchStockMovements = async () => {
+    try {
+      const res = await axios.get('/stock-movements');
+      setStockMovements(res.data.data || []);
+    } catch (err) {
+      console.error('Failed to load stock movements', err);
+    }
+  };
+
   const fetchDailyReport = async () => {
     setIsLoading(true);
     try {
@@ -216,7 +251,7 @@ export default function AdminView() {
     }
   };
 
-  // STEP 4: Load Z-Report
+  // Load Z-Report
   const loadZReport = async () => {
     try {
       const res = await axios.get('/reports/z-report');
@@ -229,21 +264,49 @@ export default function AdminView() {
 
   // Void Sale Function
   const voidSale = async (saleId) => {
-    if (!window.confirm('Are you sure you want to void this sale? This action cannot be undone.')) {
-      return;
-    }
-    try {
-      await axios.post(`/sales/${saleId}/void`);
-      alert('Sale voided successfully');
-      fetchSales();
-      fetchDailyReport();
-      loadCashierReport();
-      loadZReport();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || 'Failed to void sale');
-    }
-  };
+
+  const reason = prompt(
+    'Reason for voiding this sale'
+  );
+
+  if (!reason) return;
+
+  if (
+    !window.confirm(
+      'Are you sure you want to void this sale?'
+    )
+  ) {
+    return;
+  }
+
+  try {
+
+    await axios.post(
+      `/sales/${saleId}/void`,
+      {
+        reason
+      }
+    );
+
+    alert(
+      'Sale voided successfully'
+    );
+
+    fetchSales();
+    fetchDailyReport();
+    loadCashierReport();
+    loadZReport();
+
+  } catch (error) {
+
+    alert(
+      error.response?.data?.message ||
+      'Failed to void sale'
+    );
+
+  }
+};
+  
 
   // =========================
   // RECEIPT FUNCTIONS
@@ -266,6 +329,61 @@ export default function AdminView() {
     }, 500);
   };
 
+
+  // Create Branch Function
+  const createBranch = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('/branches', {
+        name: newBranch.name,
+        location: newBranch.location,
+        phone: newBranch.phone
+      });
+      setNewBranch({
+        name: '',
+        location: '',
+        phone: ''
+      });
+      loadBranches();
+      alert('Branch created successfully');
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+        'Failed to create branch'
+      );
+    }
+  };
+
+  // Switch Branch Function
+ const handleSwitchBranch = async (branchId) => {
+  try {
+
+    await axios.post('/switch-branch', {
+      branch_id: branchId
+    });
+
+    const me = await axios.get('/me');
+
+    setSelectedBranch(
+      me.data.data.branch_id
+    );
+
+    fetchProducts();
+    fetchDashboard();
+    fetchSales();
+    fetchDailyReport();
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert(
+      err.response?.data?.message ||
+      'Failed to switch branch'
+    );
+  }
+};
+
   // =========================
   // LOAD DATA
   // =========================
@@ -280,7 +398,24 @@ export default function AdminView() {
     fetchExpenses();
     loadCashierReport();
     loadZReport();
+    loadBranches();
+    fetchStockMovements();
   }, []);
+
+  useEffect(() => {
+  loadBranches();
+
+  axios.get('/me')
+    .then(res => {
+      console.log('ME RESPONSE:', res.data);
+
+      setSelectedBranch(
+        res.data.data.branch_id
+      );
+    })
+    .catch(console.error);
+
+}, []);
 
   useEffect(() => {
     if (adminTab === 'dashboard') {
@@ -292,6 +427,12 @@ export default function AdminView() {
     }
     if (adminTab === 'z-report') {
       loadZReport();
+    }
+    if (adminTab === 'branches') {
+      loadBranches();
+    }
+    if (adminTab === 'stock-history') {
+      fetchStockMovements();
     }
   }, [fromDate, toDate, paymentMethod, cashierId, adminTab]);
 
@@ -365,25 +506,37 @@ export default function AdminView() {
 
   const handleUpdateStock = async (e) => {
     e.preventDefault();
+
     if (!stockUpdate.product_id) {
       alert('Please select a product');
       return;
     }
-    if (!stockUpdate.quantity || stockUpdate.quantity <= 0) {
-      alert('Please enter a valid quantity');
+
+    if (!stockUpdate.quantity) {
+      alert('Please enter quantity');
       return;
     }
+
     try {
       await axios.post('/products/update-stock', {
-        product_id: parseInt(stockUpdate.product_id),
-        quantity: parseInt(stockUpdate.quantity)
+        product_id: Number(stockUpdate.product_id),
+        quantity: Number(stockUpdate.quantity),
+        type: stockUpdate.type,
+        reason: stockUpdate.reason
       });
+
       alert('Stock updated');
-      setStockUpdate({ product_id: '', quantity: '' });
+      setStockUpdate({
+        product_id: '',
+        quantity: '',
+        type: 'in',
+        reason: ''
+      });
       fetchProducts();
+      fetchStockMovements();
     } catch (err) {
       console.error(err);
-      alert('Failed to update stock');
+      alert(err.response?.data?.message || 'Failed to update stock');
     }
   };
 
@@ -474,45 +627,65 @@ export default function AdminView() {
   // =========================
   return (
     <div className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      {/* HEADER */}
-      <div className="mb-6 flex justify-between items-center">
+      {/* HEADER WITH BRANCH SELECTOR */}
+      <div className="mb-6 flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
             Restaurant Administration
           </h1>
           <p className="text-slate-500 mt-1">Complete management system for your restaurant</p>
         </div>
+        
+        {/* BRANCH SELECTOR */}
+        <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl shadow-sm">
+          <span className="font-bold text-slate-700 flex items-center gap-2">
+            <Building size={18} className="text-emerald-600" />
+            Active Branch
+          </span>
+          <select
+            value={selectedBranch}
+            onChange={(e) => handleSwitchBranch(Number(e.target.value))}
+            className="border p-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-medium"
+          >
+            {branches.map(branch => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
         <div className="text-right bg-white px-6 py-3 rounded-2xl shadow-sm">
           <p className="text-sm text-slate-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
           <p className="text-xs text-slate-400 font-mono">Admin Access</p>
         </div>
       </div>
 
-      {/* TABS - Added Z Report tab */}
+      {/* TABS */}
       <div className="flex gap-3 mb-6 flex-wrap sticky top-0 bg-slate-100/95 backdrop-blur-sm py-2 z-10">
         {[
           { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'emerald' },
           { id: 'analytics', name: 'Analytics', icon: TrendingUp, color: 'purple' },
           { id: 'sales', name: 'Sales', icon: Receipt, color: 'blue' },
-          { id: 'inventory-report', name: 'Inventory', icon: ClipboardList, color: 'orange' },
+          { id: 'inventory-report', name: 'Inventory Report', icon: ClipboardList, color: 'orange' },
           { id: 'inventory', name: 'Stock Control', icon: Box, color: 'amber' },
+          { id: 'stock-history', name: 'Stock History', icon: Clock, color: 'cyan' },
           { id: 'products', name: 'Products', icon: Package, color: 'green' },
           { id: 'categories', name: 'Categories', icon: Settings, color: 'indigo' },
           { id: 'tables', name: 'Tables', icon: Coffee, color: 'yellow' },
           { id: 'cashiers', name: 'Cashiers', icon: Users, color: 'teal' },
           { id: 'z-report', name: 'Z Report', icon: FileText, color: 'cyan' },
-          { id: 'users', name: 'Users', icon: UserCircle, color: 'red' }
+          { id: 'users', name: 'Users', icon: UserCircle, color: 'red' },
+          { id: 'branches', name: 'Branches', icon: Building, color: 'blue' }
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => {
               setAdminTab(tab.id);
-              if (tab.id === 'cashiers') {
-                loadCashierReport();
-              }
-              if (tab.id === 'z-report') {
-                loadZReport();
-              }
+              if (tab.id === 'cashiers') loadCashierReport();
+              if (tab.id === 'z-report') loadZReport();
+              if (tab.id === 'branches') loadBranches();
+              if (tab.id === 'stock-history') fetchStockMovements();
             }}
             className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold transition-all transform hover:scale-105
               ${adminTab === tab.id
@@ -651,10 +824,7 @@ export default function AdminView() {
               </div>
 
               {/* ANALYTICS DASHBOARD */}
-              <AnalyticsDashboard
-                report={report}
-                expenses={expenses}
-              />
+              <AnalyticsDashboard report={report} expenses={expenses} />
 
               {/* REPORTS GRID */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
@@ -693,19 +863,19 @@ export default function AdminView() {
                     <span className="text-xs text-slate-400 ml-auto">Best sellers</span>
                   </h2>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {Object.entries(report?.top_products || {}).map(([productName, quantity], index) => (
+                    {(report?.top_products || []).map((product, index) => (
                       <div key={index} className="flex justify-between items-center border-b pb-2 p-2 rounded-lg hover:bg-slate-50 transition">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-600">
                             {index + 1}
                           </div>
                           <div>
-                            <div className="font-bold">{productName}</div>
-                            <div className="text-xs text-slate-500">{quantity} units sold</div>
+                            <div className="font-bold">{product.name}</div>
+                            <div className="text-xs text-slate-500">{product.quantity} units sold</div>
                           </div>
                         </div>
                         <div className="text-emerald-600 font-bold">
-                          {((quantity / (report?.total_orders || 1)) * 100).toFixed(1)}%
+                          {Number(product.amount).toLocaleString()} UGX
                         </div>
                       </div>
                     ))}
@@ -728,10 +898,7 @@ export default function AdminView() {
               <PieChart size={24} className="text-purple-600" />
               Advanced Analytics
             </h2>
-            <AnalyticsDashboard
-              report={report}
-              expenses={expenses}
-            />
+            <AnalyticsDashboard report={report} expenses={expenses} />
           </div>
         </div>
       )}
@@ -750,10 +917,7 @@ export default function AdminView() {
                 className="w-full p-3 pl-10 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
               />
               {salesSearch && (
-                <button
-                  onClick={() => setSalesSearch('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                >
+                <button onClick={() => setSalesSearch('')} className="absolute right-3 top-1/2 transform -translate-y-1/2">
                   <X size={18} className="text-slate-400 hover:text-slate-600" />
                 </button>
               )}
@@ -782,9 +946,7 @@ export default function AdminView() {
                         <br />
                         <span className="text-xs text-slate-400">{new Date(sale.created_at).toLocaleTimeString()}</span>
                       </td>
-                      <td className="p-4 font-bold text-emerald-600">
-                        {Number(sale.total).toLocaleString()}
-                      </td>
+                      <td className="p-4 font-bold text-emerald-600">{Number(sale.total).toLocaleString()}</td>
                       <td className="p-4">
                         <span className={`capitalize px-2 py-1 rounded-full text-xs font-bold ${
                           sale.payment_method === 'cash' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'
@@ -795,26 +957,11 @@ export default function AdminView() {
                       <td className="p-4">{sale.cashier_name || sale.cashier?.name || '-'}</td>
                       <td className="p-4">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => viewReceipt(sale.id)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1"
-                          >
-                            <Eye size={14} />
-                            View
+                          <button onClick={() => viewReceipt(sale.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1">
+                            <Eye size={14} /> View
                           </button>
-                          <button
-                            onClick={() => reprintReceipt(sale.id)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1"
-                          >
-                            <Printer size={14} />
-                            Reprint
-                          </button>
-                          <button
-                            onClick={() => voidSale(sale.id)}
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1"
-                          >
-                            <AlertTriangle size={14} />
-                            Void
+                          <button onClick={() => voidSale(sale.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1">
+                            <AlertTriangle size={14} /> Void
                           </button>
                         </div>
                       </td>
@@ -875,27 +1022,19 @@ export default function AdminView() {
                             {product.category?.name || 'Uncategorized'}
                           </span>
                         </td>
-                        <td className="p-4 text-center font-mono">
-                          {Number(product.price || 0).toLocaleString()}
-                        </td>
+                        <td className="p-4 text-center font-mono">{Number(product.price || 0).toLocaleString()}</td>
                         <td className="p-4 text-center">
                           <span className={`font-mono font-bold ${(product.stock_quantity || 0) <= 10 ? 'text-red-600' : 'text-slate-700'}`}>
                             {product.stock_quantity || 0}
                           </span>
                           {(product.stock_quantity || 0) <= 10 && (
-                            <span className="ml-2 text-red-500 font-bold animate-pulse inline-block">
-                              ⚠️ Low
-                            </span>
+                            <span className="ml-2 text-red-500 font-bold animate-pulse inline-block">⚠️ Low</span>
                           )}
                           {(product.stock_quantity || 0) === 0 && (
-                            <span className="ml-2 text-red-600 font-bold">
-                              ❌ Out
-                            </span>
+                            <span className="ml-2 text-red-600 font-bold">❌ Out</span>
                           )}
                         </td>
-                        <td className="p-4 text-right font-bold text-emerald-600">
-                          {totalValue.toLocaleString()} UGX
-                        </td>
+                        <td className="p-4 text-right font-bold text-emerald-600">{totalValue.toLocaleString()} UGX</td>
                       </tr>
                     );
                   })
@@ -910,18 +1049,13 @@ export default function AdminView() {
               </tbody>
               <tfoot className="bg-slate-100">
                 <tr>
-                  <td colSpan="4" className="p-4 text-right font-bold text-lg">
-                    Total Stock Value:
-                  </td>
-                  <td className="p-4 text-right font-black text-xl text-emerald-700">
-                    {inventoryValue.toLocaleString()} UGX
-                  </td>
+                  <td colSpan="4" className="p-4 text-right font-bold text-lg">Total Stock Value:</td>
+                  <td className="p-4 text-right font-black text-xl text-emerald-700">{inventoryValue.toLocaleString()} UGX</td>
                 </tr>
               </tfoot>
             </table>
           </div>
 
-          {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-4 border-t">
             <div className="bg-green-50 p-4 rounded-xl text-center">
               <p className="text-sm text-green-600">Total Products</p>
@@ -939,7 +1073,7 @@ export default function AdminView() {
         </div>
       )}
 
-      {/* STOCK CONTROL TAB (Original Inventory) */}
+      {/* STOCK CONTROL TAB */}
       {adminTab === 'inventory' && (
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-2xl shadow-lg">
@@ -957,15 +1091,31 @@ export default function AdminView() {
                   </option>
                 ))}
               </select>
+              <select
+                value={stockUpdate.type || 'in'}
+                onChange={(e) => setStockUpdate({ ...stockUpdate, type: e.target.value })}
+                className="p-3 border rounded-xl"
+              >
+                <option value="in">➕ Stock In</option>
+                <option value="out">➖ Stock Out</option>
+                <option value="adjust">🔄 Adjustment</option>
+              </select>
               <input
                 type="number"
-                placeholder="Quantity to add"
+                placeholder="Quantity"
                 value={stockUpdate.quantity}
                 onChange={(e) => setStockUpdate({ ...stockUpdate, quantity: e.target.value })}
-                className="p-3 border rounded-xl w-32 focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="p-3 border rounded-xl w-32"
+              />
+              <input
+                type="text"
+                placeholder="Reason"
+                value={stockUpdate.reason || ''}
+                onChange={(e) => setStockUpdate({ ...stockUpdate, reason: e.target.value })}
+                className="p-3 border rounded-xl flex-1"
               />
               <button type="submit" className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-emerald-700">
-                Update Stock
+                Save Movement
               </button>
             </form>
           </div>
@@ -985,14 +1135,10 @@ export default function AdminView() {
                   <div key={product.id} className="flex justify-between items-center border-b pb-3 hover:bg-slate-50 p-3 rounded-lg transition">
                     <div>
                       <p className="font-bold">{product.name}</p>
-                      <p className="text-xs text-slate-500">
-                        Stock: {product.stock_quantity || 0} units
-                      </p>
+                      <p className="text-xs text-slate-500">Stock: {product.stock_quantity || 0} units</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-emerald-600 font-bold">
-                        {Number(product.price).toLocaleString()} UGX
-                      </div>
+                      <div className="text-emerald-600 font-bold">{Number(product.price).toLocaleString()} UGX</div>
                       <div className={`text-xs font-bold ${(product.stock_quantity || 0) < 10 ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
                         {(product.stock_quantity || 0) < 10 && '⚠️ Low stock alert'}
                         {(product.stock_quantity || 0) === 0 && '❌ Out of stock'}
@@ -1005,6 +1151,87 @@ export default function AdminView() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* STOCK HISTORY TAB */}
+      {adminTab === 'stock-history' && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Clock size={24} className="text-cyan-600" />
+              Stock Movement History
+            </h2>
+            <button
+              onClick={fetchStockMovements}
+              className="bg-cyan-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-cyan-700 transition flex items-center gap-2"
+            >
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
+
+          {stockMovements.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-2xl">
+              <Clock size={48} className="mx-auto text-slate-300 mb-3" />
+              <p className="text-slate-500">No stock movements recorded yet</p>
+              <p className="text-sm text-slate-400 mt-1">Stock updates will appear here once you make inventory changes</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl">
+                  <tr className="border-b">
+                    <th className="p-4 text-left font-bold text-slate-700">Date</th>
+                    <th className="p-4 text-left font-bold text-slate-700">Product</th>
+                    <th className="p-4 text-left font-bold text-slate-700">Type</th>
+                    <th className="p-4 text-center font-bold text-slate-700">Qty</th>
+                    <th className="p-4 text-left font-bold text-slate-700">User</th>
+                    <th className="p-4 text-left font-bold text-slate-700">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockMovements.map((movement) => (
+                    <tr key={movement.id} className="border-b hover:bg-slate-50 transition">
+                      <td className="p-4 text-sm">
+                        {new Date(movement.created_at).toLocaleString()}
+                      </td>
+                      <td className="p-4 font-medium">
+                        {movement.product?.name || `Product #${movement.product_id}`}
+                      </td>
+                      <td className="p-4">
+                        {movement.type === 'in' && (
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                            ➕ Stock In
+                          </span>
+                        )}
+                        {movement.type === 'out' && (
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                            ➖ Stock Out
+                          </span>
+                        )}
+                        {movement.type === 'adjust' && (
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">
+                            🔄 Adjustment
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center font-bold">{Math.abs(movement.quantity)}</td>
+                      <td className="p-4 text-slate-600">{movement.user?.name || 'System'}</td>
+                      <td className="p-4 text-slate-600">{movement.reason || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50">
+                  <tr>
+                    <td colSpan="6" className="p-4 text-sm text-slate-500">
+                      Total Movements: {stockMovements.length}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1053,6 +1280,7 @@ export default function AdminView() {
               className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
             >
               <option value="direct">🏪 Direct / No Kitchen</option>
+              <option value="bar">🍺 Bar</option>
               <option value="kitchen">🍳 Kitchen Item</option>
             </select>
             <button
@@ -1102,26 +1330,15 @@ export default function AdminView() {
                 categories.map((category) => (
                   <div key={category.id} className="flex justify-between items-center border-b pb-3 hover:bg-slate-50 p-3 rounded-lg transition">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="w-6 h-6 rounded-full border"
-                        style={{ backgroundColor: category.color }}
-                      />
+                      <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: category.color }} />
                       <span className="font-bold">{category.name}</span>
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditCategory(category)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1"
-                      >
-                        <Edit2 size={14} />
-                        Edit
+                      <button onClick={() => handleEditCategory(category)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1">
+                        <Edit2 size={14} /> Edit
                       </button>
-                      <button
-                        onClick={() => handleDeleteCategory(category)}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 flex items-center gap-1"
-                      >
-                        <Trash2 size={14} />
-                        Delete
+                      <button onClick={() => handleDeleteCategory(category)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 flex items-center gap-1">
+                        <Trash2 size={14} /> Delete
                       </button>
                     </div>
                   </div>
@@ -1142,7 +1359,7 @@ export default function AdminView() {
             <form onSubmit={handleAddTable} className="space-y-4">
               <input
                 type="text"
-                placeholder="Table Name (e.g., Table 1, VIP Lounge)"
+                placeholder="Table Name"
                 value={newTable.name}
                 onChange={(e) => setNewTable({ ...newTable, name: e.target.value })}
                 className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -1150,7 +1367,7 @@ export default function AdminView() {
               />
               <input
                 type="number"
-                placeholder="Capacity (number of seats)"
+                placeholder="Capacity"
                 value={newTable.capacity}
                 onChange={(e) => setNewTable({ ...newTable, capacity: e.target.value })}
                 className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -1163,7 +1380,7 @@ export default function AdminView() {
                   onChange={(e) => setNewTable({ ...newTable, is_vip: e.target.checked })}
                   className="w-4 h-4"
                 />
-                <span className="font-bold">VIP Table (Premium seating)</span>
+                <span className="font-bold">VIP Table</span>
               </label>
               <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold hover:bg-emerald-700">
                 Add Table
@@ -1174,40 +1391,24 @@ export default function AdminView() {
           <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h2 className="text-2xl font-bold mb-6">Restaurant Tables</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {Array.isArray(tables) &&
-               tables.map((table) => (
-                <div
-                  key={table.id}
-                  className={`p-5 rounded-2xl border shadow-sm transition hover:shadow-md transform hover:scale-105 cursor-pointer
-                    ${table.is_vip
-                      ? 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-300'
-                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-                    }`}
-                >
+              {Array.isArray(tables) && tables.map((table) => (
+                <div key={table.id} className={`p-5 rounded-2xl border shadow-sm transition hover:shadow-md transform hover:scale-105 cursor-pointer
+                  ${table.is_vip ? 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-300' : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'}`}>
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-bold text-lg">{table.name}</h3>
                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-                        <Users size={12} />
-                        Capacity: {table.capacity}
+                        <Users size={12} /> Capacity: {table.capacity}
                       </p>
                     </div>
-                    {table.is_vip && (
-                      <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded-full font-bold">
-                        👑 VIP
-                      </span>
-                    )}
+                    {table.is_vip && <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded-full font-bold">👑 VIP</span>}
                   </div>
-                  <div className="mt-3 text-xs text-emerald-600">
-                    🟢 Available
-                  </div>
+                  <div className="mt-3 text-xs text-emerald-600">🟢 Available</div>
                 </div>
               ))}
-             {Array.isArray(tables) && tables.length === 0 && (
-              <p className="text-slate-500 text-center col-span-3 py-8">
-                No tables added yet
-              </p>
-            )}
+              {Array.isArray(tables) && tables.length === 0 && (
+                <p className="text-slate-500 text-center col-span-3 py-8">No tables added yet</p>
+              )}
             </div>
           </div>
         </div>
@@ -1221,12 +1422,8 @@ export default function AdminView() {
               <Award size={28} className="text-teal-600" />
               Cashier Performance
             </h2>
-            <button
-              onClick={loadCashierReport}
-              className="bg-teal-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-teal-700 transition flex items-center gap-2"
-            >
-              <RefreshCw size={16} />
-              Refresh
+            <button onClick={loadCashierReport} className="bg-teal-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-teal-700 transition flex items-center gap-2">
+              <RefreshCw size={16} /> Refresh
             </button>
           </div>
 
@@ -1234,80 +1431,35 @@ export default function AdminView() {
             <div className="text-center py-12 bg-slate-50 rounded-2xl">
               <Users size={48} className="mx-auto text-slate-300 mb-3" />
               <p className="text-slate-500">No cashier data available</p>
-              <p className="text-sm text-slate-400 mt-1">Sales will appear here once cashiers make transactions</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-xl">
                   <tr>
-                    <th className="p-4 text-left font-bold text-slate-700">Cashier Name</th>
-                    <th className="p-4 text-left font-bold text-slate-700">Orders Processed</th>
-                    <th className="p-4 text-left font-bold text-slate-700">Total Sales (UGX)</th>
-                    <th className="p-4 text-left font-bold text-slate-700">Avg. Order Value</th>
-                    <th className="p-4 text-left font-bold text-slate-700">Performance</th>
+                    <th className="p-4 text-left">Cashier Name</th>
+                    <th className="p-4 text-left">Orders Processed</th>
+                    <th className="p-4 text-left">Total Sales (UGX)</th>
+                    <th className="p-4 text-left">Avg. Order Value</th>
+                    <th className="p-4 text-left">Performance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cashierReport.map((cashier, index) => {
-                    const avgOrderValue = cashier.orders_count > 0 
-                      ? cashier.total_sales / cashier.orders_count 
-                      : 0;
+                    const avgOrderValue = cashier.orders_count > 0 ? cashier.total_sales / cashier.orders_count : 0;
                     const maxSales = Math.max(...cashierReport.map(c => c.total_sales), 0);
                     const widthPercent = maxSales > 0 ? (cashier.total_sales / maxSales) * 100 : 0;
-                    
                     return (
-                      <tr key={cashier.name || index} className="border-b hover:bg-slate-50 transition group">
+                      <tr className="border-b" key={index}>
+                        <td className="p-4">{cashier.name || cashier.username}</td>
+                        <td className="p-4">{cashier.orders_count || 0}</td>
+                        <td className="p-4">{Number(cashier.total_sales || 0).toLocaleString()} UGX</td>
+                        <td className="p-4">{Number(avgOrderValue || 0).toLocaleString()} UGX</td>
                         <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white font-bold">
-                              {cashier.name?.charAt(0).toUpperCase() || '?'}
-                            </div>
-                            <div>
-                              <div className="font-bold">{cashier.name}</div>
-                              <div className="text-xs text-slate-400">Cashier</div>
-                            </div>
+                          <div className="h-3 w-full rounded-full bg-slate-200 overflow-hidden">
+                            <div className="h-full rounded-full bg-teal-500" style={{ width: `${widthPercent}%` }} />
                           </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <Receipt size={16} className="text-slate-400" />
-                            <span className="font-mono font-bold text-lg">{cashier.orders_count || 0}</span>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="font-bold text-emerald-600">
-                            {Number(cashier.total_sales || 0).toLocaleString()} UGX
-                          </div>
-                          <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                            <div 
-                              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                              style={{ width: `${widthPercent}%` }}
-                            />
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="text-slate-600">
-                            {avgOrderValue.toLocaleString()} UGX
-                          </div>
-                          <div className="text-xs text-slate-400">per order</div>
-                        </td>
-                        <td className="p-4">
-                          {cashier.orders_count > 10 ? (
-                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
-                              <TrendingUp size={12} />
-                              Top Performer
-                            </span>
-                          ) : cashier.orders_count > 0 ? (
-                            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
-                              <Clock size={12} />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold w-fit">
-                              No Activity
-                            </span>
-                          )}
+                          <div className="text-xs text-slate-500 mt-1">{widthPercent.toFixed(0)}% of top seller</div>
                         </td>
                       </tr>
                     );
@@ -1316,17 +1468,9 @@ export default function AdminView() {
                 <tfoot className="bg-slate-50">
                   <tr>
                     <td className="p-4 font-bold">Total</td>
-                    <td className="p-4 font-bold">
-                      {cashierReport.reduce((sum, c) => sum + (c.orders_count || 0), 0)}
-                    </td>
-                    <td className="p-4 font-bold text-emerald-700">
-                      {cashierReport.reduce((sum, c) => sum + (c.total_sales || 0), 0).toLocaleString()} UGX
-                    </td>
-                    <td colSpan="2" className="p-4">
-                      <div className="text-sm text-slate-500">
-                        Based on {cashierReport.length} cashier{cashierReport.length !== 1 ? 's' : ''}
-                      </div>
-                    </td>
+                    <td className="p-4 font-bold">{cashierReport.reduce((sum, c) => sum + (c.orders_count || 0), 0)}</td>
+                    <td className="p-4 font-bold text-emerald-700">{cashierReport.reduce((sum, c) => sum + (c.total_sales || 0), 0).toLocaleString()} UGX</td>
+                    <td colSpan="2" className="p-4"><div className="text-sm text-slate-500">Based on {cashierReport.length} cashier{cashierReport.length !== 1 ? 's' : ''}</div></td>
                   </tr>
                 </tfoot>
               </table>
@@ -1335,7 +1479,7 @@ export default function AdminView() {
         </div>
       )}
 
-      {/* Z-REPORT TAB - STEPS 6 & 7 */}
+      {/* Z-REPORT TAB */}
       {adminTab === 'z-report' && zReport && (
         <div className="bg-white p-6 rounded-2xl shadow-lg">
           <div className="flex justify-between items-center mb-6">
@@ -1343,12 +1487,8 @@ export default function AdminView() {
               <FileText size={28} className="text-cyan-600" />
               End Of Day Report
             </h2>
-            <button
-              onClick={loadZReport}
-              className="bg-cyan-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-cyan-700 transition flex items-center gap-2"
-            >
-              <RefreshCw size={16} />
-              Refresh
+            <button onClick={loadZReport} className="bg-cyan-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-cyan-700 transition flex items-center gap-2">
+              <RefreshCw size={16} /> Refresh
             </button>
           </div>
 
@@ -1359,16 +1499,12 @@ export default function AdminView() {
             </div>
             <div className="bg-gradient-to-br from-emerald-50 to-white p-5 rounded-2xl border border-emerald-100">
               <p className="text-slate-500 text-sm">Total Sales</p>
-              <h3 className="text-3xl font-bold text-emerald-600 mt-2">
-                {Number(zReport.total_sales || 0).toLocaleString()} UGX
-              </h3>
+              <h3 className="text-3xl font-bold text-emerald-600 mt-2">{Number(zReport.total_sales || 0).toLocaleString()} UGX</h3>
             </div>
             <div className="bg-gradient-to-br from-purple-50 to-white p-5 rounded-2xl border border-purple-100">
               <p className="text-slate-500 text-sm">Average Order Value</p>
               <h3 className="text-3xl font-bold text-purple-600 mt-2">
-                {zReport.transactions > 0 
-                  ? Number((zReport.total_sales / zReport.transactions) || 0).toLocaleString() 
-                  : 0} UGX
+                {zReport.transactions > 0 ? Number((zReport.total_sales / zReport.transactions) || 0).toLocaleString() : 0} UGX
               </h3>
             </div>
           </div>
@@ -1379,72 +1515,91 @@ export default function AdminView() {
               <div className="bg-green-50 p-4 rounded-xl">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-green-700">💵 Cash</span>
-                  <span className="text-2xl font-bold text-green-700">
-                    {Number(zReport.cash_sales || 0).toLocaleString()} UGX
-                  </span>
+                  <span className="text-2xl font-bold text-green-700">{Number(zReport.cash_sales || 0).toLocaleString()} UGX</span>
                 </div>
-                <div className="mt-2 text-sm text-green-600">
-                  {zReport.total_sales > 0 
-                    ? `${((zReport.cash_sales / zReport.total_sales) * 100).toFixed(1)}% of total`
-                    : '0% of total'}
-                </div>
+                <div className="mt-2 text-sm text-green-600">{zReport.total_sales > 0 ? `${((zReport.cash_sales / zReport.total_sales) * 100).toFixed(1)}% of total` : '0% of total'}</div>
               </div>
               <div className="bg-purple-50 p-4 rounded-xl">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-purple-700">📱 Mobile Money</span>
-                  <span className="text-2xl font-bold text-purple-700">
-                    {Number(zReport.mobile_sales || 0).toLocaleString()} UGX
-                  </span>
+                  <span className="text-2xl font-bold text-purple-700">{Number(zReport.mobile_sales || 0).toLocaleString()} UGX</span>
                 </div>
-                <div className="mt-2 text-sm text-purple-600">
-                  {zReport.total_sales > 0 
-                    ? `${((zReport.mobile_sales / zReport.total_sales) * 100).toFixed(1)}% of total`
-                    : '0% of total'}
-                </div>
+                <div className="mt-2 text-sm text-purple-600">{zReport.total_sales > 0 ? `${((zReport.mobile_sales / zReport.total_sales) * 100).toFixed(1)}% of total` : '0% of total'}</div>
               </div>
               <div className="bg-blue-50 p-4 rounded-xl">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-blue-700">💳 Card</span>
-                  <span className="text-2xl font-bold text-blue-700">
-                    {Number(zReport.card_sales || 0).toLocaleString()} UGX
-                  </span>
+                  <span className="text-2xl font-bold text-blue-700">{Number(zReport.card_sales || 0).toLocaleString()} UGX</span>
                 </div>
-                <div className="mt-2 text-sm text-blue-600">
-                  {zReport.total_sales > 0 
-                    ? `${((zReport.card_sales / zReport.total_sales) * 100).toFixed(1)}% of total`
-                    : '0% of total'}
-                </div>
+                <div className="mt-2 text-sm text-blue-600">{zReport.total_sales > 0 ? `${((zReport.card_sales / zReport.total_sales) * 100).toFixed(1)}% of total` : '0% of total'}</div>
               </div>
             </div>
           </div>
 
-          {/* STEP 7: Print Button */}
           <div className="mt-6 pt-4 border-t flex gap-3">
-            <button
-              onClick={() => window.print()}
-              className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition flex items-center gap-2"
-            >
-              <Printer size={18} />
-              Print Z Report
+            <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition flex items-center gap-2">
+              <Printer size={18} /> Print Z Report
             </button>
-            <button
-              onClick={() => {
-                const startDate = new Date();
-                startDate.setHours(0, 0, 0, 0);
-                const endDate = new Date();
-                endDate.setHours(23, 59, 59, 999);
-                loadZReport();
-              }}
-              className="bg-cyan-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-cyan-700 transition flex items-center gap-2"
-            >
-              <RefreshCw size={18} />
-              Refresh Today's Report
+            <button onClick={loadZReport} className="bg-cyan-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-cyan-700 transition flex items-center gap-2">
+              <RefreshCw size={18} /> Refresh Today's Report
             </button>
           </div>
 
-          {/* Report Footer */}
           <div className="mt-6 text-center text-xs text-slate-400 border-t pt-4">
             Generated on {new Date().toLocaleString()} | Z-Report for End of Day Settlement
+          </div>
+        </div>
+      )}
+
+      {/* BRANCHES TAB */}
+      {adminTab === 'branches' && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-2xl shadow">
+            <h2 className="text-xl font-bold mb-4">Add Branch</h2>
+            <form onSubmit={createBranch} className="space-y-4">
+              <input
+                type="text"
+                placeholder="Branch Name"
+                value={newBranch.name}
+                onChange={(e) => setNewBranch({ ...newBranch, name: e.target.value })}
+                className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Location"
+                value={newBranch.location}
+                onChange={(e) => setNewBranch({ ...newBranch, location: e.target.value })}
+                className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Phone"
+                value={newBranch.phone}
+                onChange={(e) => setNewBranch({ ...newBranch, phone: e.target.value })}
+                className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
+              <button type="submit" className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition">
+                Create Branch
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow">
+            <h2 className="text-xl font-bold mb-4">Existing Branches</h2>
+            {branches.length > 0 ? (
+              branches.map(branch => (
+                <div key={branch.id} className="border-b py-3 hover:bg-slate-50 transition p-2 rounded-lg">
+                  <div className="font-bold text-emerald-700">{branch.name}</div>
+                  <div className="text-sm text-slate-500 flex items-center gap-1 mt-1">📍 {branch.location}</div>
+                  <div className="text-sm text-slate-500 flex items-center gap-1">📞 {branch.phone}</div>
+                </div>
+              ))
+            ) : (
+              <p className="text-slate-500 text-center py-8">No branches added yet</p>
+            )}
           </div>
         </div>
       )}
@@ -1490,10 +1645,7 @@ export default function AdminView() {
                 <option value="waiter">🍽️ Waiter</option>
                 <option value="kitchen">👨‍🍳 Kitchen</option>
               </select>
-              <button
-                type="submit"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-xl font-black w-full transition"
-              >
+              <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-xl font-black w-full transition">
                 Create User
               </button>
             </form>
@@ -1527,13 +1679,9 @@ export default function AdminView() {
                     </td>
                     <td className="p-4">
                       {user.is_active ? (
-                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold">
-                          🟢 Active
-                        </span>
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold">🟢 Active</span>
                       ) : (
-                        <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-bold">
-                          🔴 Inactive
-                        </span>
+                        <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-bold">🔴 Inactive</span>
                       )}
                     </td>
                     <td className="p-4">
@@ -1552,17 +1700,14 @@ export default function AdminView() {
                         }}
                         className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-1"
                       >
-                        <Trash2 size={14} />
-                        Delete
+                        <Trash2 size={14} /> Delete
                       </button>
                     </td>
                   </tr>
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="p-8 text-center text-slate-500">
-                      No users found
-                    </td>
+                    <td colSpan="5" className="p-8 text-center text-slate-500">No users found</td>
                   </tr>
                 )}
               </tbody>
@@ -1577,20 +1722,10 @@ export default function AdminView() {
           <div className="bg-white p-6 rounded-3xl max-w-md w-full mx-auto max-h-[90vh] overflow-y-auto shadow-2xl">
             <ReceiptPrint sale={selectedSale} />
             <div className="flex gap-3 mt-4 sticky bottom-0 bg-white pt-4">
-              <button
-                onClick={() => window.print()}
-                className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700 flex items-center justify-center gap-2"
-              >
-                <Printer size={18} />
-                Print
+              <button onClick={() => window.print()} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700 flex items-center justify-center gap-2">
+                <Printer size={18} /> Print
               </button>
-              <button
-                onClick={() => {
-                  setShowReceipt(false);
-                  setSelectedSale(null);
-                }}
-                className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300"
-              >
+              <button onClick={() => { setShowReceipt(false); setSelectedSale(null); }} className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300">
                 Close
               </button>
             </div>
@@ -1598,29 +1733,17 @@ export default function AdminView() {
         </div>
       )}
 
-      {showPrintReport && (
-        <DailyReportPrint
-          report={report}
-          onClose={() => setShowPrintReport(false)}
-        />
-      )}
+      {showPrintReport && <DailyReportPrint report={report} onClose={() => setShowPrintReport(false)} />}
 
       {selectedReceipt && !showReceipt && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-3xl max-w-md w-full mx-auto max-h-[90vh] overflow-y-auto shadow-2xl">
             <ReceiptPrint sale={selectedReceipt} />
             <div className="flex gap-3 mt-4 sticky bottom-0 bg-white pt-4">
-              <button
-                onClick={() => window.print()}
-                className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700 flex items-center justify-center gap-2"
-              >
-                <Printer size={18} />
-                Print
+              <button onClick={() => window.print()} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700 flex items-center justify-center gap-2">
+                <Printer size={18} /> Print
               </button>
-              <button
-                onClick={() => setSelectedReceipt(null)}
-                className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300"
-              >
+              <button onClick={() => setSelectedReceipt(null)} className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300">
                 Close
               </button>
             </div>
@@ -1631,23 +1754,12 @@ export default function AdminView() {
       {showThermalAnalytics && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-3xl max-w-4xl w-full mx-auto max-h-[90vh] overflow-y-auto shadow-2xl">
-            <ThermalAnalyticsReport
-              report={report}
-              fromDate={fromDate}
-              toDate={toDate}
-            />
+            <ThermalAnalyticsReport report={report} fromDate={fromDate} toDate={toDate} />
             <div className="flex gap-3 mt-4 sticky bottom-0 bg-white pt-4">
-              <button
-                onClick={() => window.print()}
-                className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700 flex items-center justify-center gap-2"
-              >
-                <Printer size={18} />
-                Print Report
+              <button onClick={() => window.print()} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700 flex items-center justify-center gap-2">
+                <Printer size={18} /> Print Report
               </button>
-              <button
-                onClick={() => setShowThermalAnalytics(false)}
-                className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300"
-              >
+              <button onClick={() => setShowThermalAnalytics(false)} className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300">
                 Close
               </button>
             </div>
@@ -1696,17 +1808,10 @@ export default function AdminView() {
                 required
               />
               <div className="flex gap-3">
-                <button
-                  type="submit"
-                  className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700"
-                >
+                <button type="submit" className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex-1 hover:bg-emerald-700">
                   Add Expense
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowExpenseModal(false)}
-                  className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300"
-                >
+                <button type="button" onClick={() => setShowExpenseModal(false)} className="bg-slate-200 px-5 py-3 rounded-xl font-bold flex-1 hover:bg-slate-300">
                   Cancel
                 </button>
               </div>
