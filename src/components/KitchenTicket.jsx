@@ -10,8 +10,8 @@ export default function KitchenTicket({ receipt }) {
   const kitchenItems =
     receipt.items?.filter(
       item =>
-        item.product?.preparation_area ===
-        'kitchen'
+       (item.product?.preparation_area ||
+ item.preparation_area) === 'kitchen'
     ) || [];
 
   /**
@@ -22,33 +22,40 @@ export default function KitchenTicket({ receipt }) {
     return null;
   }
 
-
   useEffect(() => {
 
-  console.log(
-    "KITCHEN RECEIPT",
-    receipt
-  );
-
-  receipt?.items?.forEach(item => {
-
     console.log(
-      item.product?.name,
-      item.product?.preparation_area
+      "KITCHEN RECEIPT",
+      receipt
     );
 
-  });
+    receipt?.items?.forEach(item => {
 
-}, [receipt]);
+      console.log(
+        item.product?.name,
+        item.product?.preparation_area
+      );
+
+    });
+
+  }, [receipt]);
+
   /**
    * PRINT KITCHEN TICKET
    */
   const printKitchenTicket = () => {
 
-    const content =
-     document.getElementById(
-  `kitchen-print-${receipt.id}`
-)?.innerHTML;
+    const element =
+document.getElementById(
+ `kitchen-print-${receipt.id}`
+);
+
+if (!element) {
+  console.log('Kitchen element not found');
+  return;
+}
+
+const content = element.innerHTML;
 
     if (!content) {
       console.error(
@@ -57,11 +64,16 @@ export default function KitchenTicket({ receipt }) {
       return;
     }
 
-    const win = window.open(
-      '',
-      '',
-      'width=420,height=800'
-    );
+   const win = window.open(
+  '',
+  '_blank',
+  'width=420,height=800'
+);
+
+if (!win) {
+  alert('Popup blocked. Allow popups for this site.');
+  return;
+}
 
     win.document.write(`
 
@@ -131,15 +143,10 @@ export default function KitchenTicket({ receipt }) {
 
     win.document.close();
 
-    setTimeout(() => {
-
-      win.focus();
-
-      win.print();
-
-      win.close();
-
-    }, 1000);
+    win.onload = () => {
+   win.print();
+   win.close();
+};
 
   };
 
@@ -151,17 +158,13 @@ export default function KitchenTicket({ receipt }) {
    */
   useEffect(() => {
 
-    if (!receipt) return;
+  if (!receipt) return;
 
-    const timer = setTimeout(() => {
+  setTimeout(() => {
+    printKitchenTicket();
+  }, 1500);
 
-      printKitchenTicket();
-
-    }, 1500);
-
-    return () => clearTimeout(timer);
-
-  }, [receipt]);
+}, [receipt]);
 
   return (
 

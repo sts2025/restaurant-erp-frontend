@@ -10,7 +10,8 @@ export default function BarTicket({ receipt }) {
   const barItems =
   receipt.items?.filter(
     item =>
-      item.product?.preparation_area === 'bar'
+     (item.product?.preparation_area ||
+ item.preparation_area) === 'bar'
   ) || [];
 
   /**
@@ -21,26 +22,22 @@ export default function BarTicket({ receipt }) {
     return null;
   }
 
-
-  useEffect(() => {
-
-  console.log(
-    "BAR RECEIPT",
-    receipt
-  );
-
-}, [receipt]);
-
   /**
    * PRINT BAR TICKET
    */
   const printBarTicket = () => {
 
-    const content =
-     document.getElementById(
-  `bar-print-${receipt.id}`
-)?.innerHTML;
+    const element =
+document.getElementById(
+ `bar-print-${receipt.id}`
+);
 
+if (!element) {
+  console.log('Bar element not found');
+  return;
+}
+
+const content = element.innerHTML;
     if (!content) {
       console.error(
         'Bar content not found'
@@ -49,10 +46,15 @@ export default function BarTicket({ receipt }) {
     }
 
     const win = window.open(
-      '',
-      '',
-      'width=420,height=800'
-    );
+  '',
+  '_blank',
+  'width=420,height=800'
+);
+
+if (!win) {
+  alert('Popup blocked. Allow popups for this site.');
+  return;
+}
 
     win.document.write(`
 
@@ -122,15 +124,10 @@ export default function BarTicket({ receipt }) {
 
     win.document.close();
 
-    setTimeout(() => {
-
-      win.focus();
-
-      win.print();
-
-      win.close();
-
-    }, 1000);
+    win.onload = () => {
+   win.print();
+   win.close();
+};
 
   };
 
@@ -140,19 +137,15 @@ export default function BarTicket({ receipt }) {
    * Delay allows customer
    * receipt to finish first.
    */
-  useEffect(() => {
+ useEffect(() => {
 
-    if (!receipt) return;
+  if (!receipt) return;
 
-    const timer = setTimeout(() => {
+  setTimeout(() => {
+    printBarTicket();
+  }, 2000);
 
-      printBarTicket();
-
-    }, 1500);
-
-    return () => clearTimeout(timer);
-
-  }, [receipt]);
+}, [receipt]);
 
   return (
 

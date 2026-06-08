@@ -1,418 +1,172 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
-export default function Receipt({
-  receipt,
-  onClose
-}) {
+export default function Receipt({ receipt, onClose }) {
+  const printedRef = useRef(false);
 
-  if (!receipt) return null;
-
-  /**
-   * PRINT RECEIPT
-   */
-  const printReceipt = () => {
-
-    const content =
-     document.getElementById(
-  `receipt-print-${receipt.id}`
-)?.innerHTML;
-
-    if (!content) return;
-
-    const win = window.open(
-      '',
-      '',
-      'width=420,height=800'
-    );
-
-    win.document.write(`
-      <html>
-        <head>
-
-          <title>Receipt</title>
-
-          <style>
-
-            @page{
-              size:80mm auto;
-              margin:0;
-            }
-
-            body{
-              width:72mm;
-              padding:8px;
-              margin:0;
-              font-family:Arial,sans-serif;
-              color:#000;
-            }
-
-            h1{
-              text-align:center;
-              margin:0;
-              font-size:20px;
-            }
-
-            .center{
-              text-align:center;
-            }
-
-            .line{
-              border-top:1px dashed #000;
-              margin:8px 0;
-            }
-
-            .row{
-              display:flex;
-              justify-content:space-between;
-              margin-bottom:4px;
-            }
-
-            .item{
-              margin-bottom:8px;
-            }
-
-            .small{
-              font-size:12px;
-            }
-
-          </style>
-
-        </head>
-
-        <body onload="window.print();window.close();">
-
-          ${content}
-
-        </body>
-
-      </html>
-    `);
-
-    win.document.close();
-  };
-
-  /**
-   * AUTO PRINT
-   */
   useEffect(() => {
+    if (!receipt) return;
+    if (printedRef.current) return;
 
-    const timer = setTimeout(() => {
+    printedRef.current = true;
 
-      printReceipt();
+    const receiptHtml = `
+    <html>
+    <head>
+      <title>Receipt</title>
+      <style>
+        /* Fix 1: Updated page and body styles */
+        @page {
+          margin: 0;
+          size: 80mm auto;
+        }
 
-    }, 500);
+        html, body {
+          width: 72mm;
+          margin: 0;
+          padding: 2mm;
+          font-family: monospace;
+          font-size: 12px;
+          display: inline-block;
+        }
 
-    return () => clearTimeout(timer);
+        /* Fix 2: Receipt wrapper forces tight wrap */
+        .receipt {
+          width: 72mm;
+          display: inline-block;
+        }
 
-  }, []);
+        /* Fix 3: Remove default paragraph margins */
+        p {
+          margin: 2px 0;
+        }
 
-  return (
+        /* Existing receipt styling */
+        .center {
+          text-align: center;
+        }
 
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        .line {
+          border-top: 1px dashed #000;
+          margin: 6px 0;
+        }
 
-      <div className="bg-white w-[360px] rounded-2xl shadow-2xl overflow-hidden">
+        .row {
+          display: flex;
+          justify-content: space-between;
+          margin: 2px 0;
+        }
 
-        {/* HEADER */}
+        .big {
+          font-size: 18px;
+          font-weight: bold;
+        }
 
-        <div className="bg-emerald-600 text-white p-5 text-center">
-
-          <h1 className="text-3xl font-black">
-
-  {receipt.branch?.name ||
-    'MAIN RESTAURANT'}
-
-</h1>
-
-          <p className="text-sm opacity-90">
-
-            SALES RECEIPT
-
-          </p>
-
-        </div>
-
-        {/* PRINT AREA */}
-
-        <div
-         id={`receipt-print-${receipt.id}`}
-          className="p-5 text-sm"
-        >
-
-          {/* BUSINESS */}
-
-          <div className="text-center mb-4">
-
-            <p>Kampala, Uganda</p>
-
-            <p>+256 700 000000</p>
-
+        .bold {
+          font-weight: bold;
+        }
+      </style>
+    </head>
+    <body>
+      <!-- Fix 2: Wrap entire content in .receipt -->
+      <div class="receipt">
+        <div class="center">
+          <div class="big">
+            ${receipt.branch?.name || 'MY BUSINESS'}
           </div>
-
-          <div className="border-t border-dashed border-black my-3"></div>
-
-          {/* INFO */}
-
-          <div className="space-y-1 mb-4">
-
-            <div className="flex justify-between">
-
-              <span>Receipt</span>
-
-              <span className="font-bold">
-
-                {receipt.receipt_number || receipt.id}
-
-              </span>
-
-            </div>
-
-            <div className="flex justify-between">
-
-              <span>Date</span>
-
-              <span>
-
-                {new Date(
-                  receipt.created_at
-                ).toLocaleString()}
-
-              </span>
-
-            </div>
-
-            <div className="flex justify-between">
-
-              <span>Table</span>
-
-              <span>
-
-                {receipt.table?.name ||
-                  'Takeaway'}
-
-              </span>
-
-            </div>
-
-            <div className="flex justify-between">
-
-              <span>Payment</span>
-
-              <span>
-
-                {receipt.payment_method}
-
-              </span>
-
-            </div>
-
-            {receipt.is_offline && (
-
-              <div className="text-center text-red-600 font-bold mt-2">
-
-                OFFLINE SALE
-
-              </div>
-
-            )}
-
-          </div>
-
-          <div className="border-t border-dashed border-black my-3"></div>
-
-          {/* ITEMS */}
-
           <div>
+            ${receipt.branch?.address || 'Kampala, Uganda'}
+          </div>
+          <div>
+            Tel: ${receipt.branch?.phone || '0700000000'}
+          </div>
+        </div>
 
-            {receipt.items?.map(
-              (item, index) => (
+        <div class="line"></div>
 
-                <div
-                  key={index}
-                  className="mb-3"
-                >
+        <div>Receipt: ${receipt.receipt_number}</div>
+        <div>Date: ${new Date(receipt.created_at).toLocaleString()}</div>
+        <div>Cashier: ${receipt.user?.name || 'ADMIN'}</div>
+        <div>Table: ${receipt.table?.name || 'TAKEAWAY'}</div>
+        <div>Payment: ${receipt.payment_method || 'CASH'}</div>
 
-                  <div className="font-bold">
+        <div class="line"></div>
 
-                    {item.product?.name ||
-                      'Item'}
+        ${(receipt.items || [])
+          .map(
+            (item) => `
+          <div>${item.quantity} x ${item.product?.name || ''}</div>
+          <div class="row">
+            <span>@ ${Number(item.price).toLocaleString()}</span>
+            <span>${Number(item.quantity * item.price).toLocaleString()}</span>
+          </div>
+        `
+          )
+          .join('')}
 
-                  </div>
-                  {receipt.is_reprint && (
+        <div class="line"></div>
 
-  <div className="text-center text-red-600 font-bold mt-2">
-
-    *** REPRINT COPY ***
-
-  </div>
-
-)}
-
-                  <div className="flex justify-between text-xs">
-
-                    <span>
-
-                      {item.quantity} × {Number(
-                        item.price || 0
-                      ).toLocaleString()}
-
-                    </span>
-
-                    <span>
-
-                      {Number(
-                        item.total ||
-                        (
-                          item.quantity *
-                          item.price
-                        )
-                      ).toLocaleString()}
-
-                    </span>
-
-                  </div>
-
-                </div>
-
-              )
+        <div class="row">
+          <span>Items</span>
+          <span>
+            ${(receipt.items || []).reduce(
+              (total, item) => total + Number(item.quantity),
+              0
             )}
-
-          </div>
-
-          <div className="border-t border-dashed border-black my-3"></div>
-
-          {/* TOTALS */}
-
-          <div className="space-y-2">
-
-            <div className="flex justify-between">
-
-              <span>Total</span>
-
-              <span className="font-bold">
-
-                {Number(
-                  receipt.total || 0
-                ).toLocaleString()} UGX
-
-              </span>
-
-            </div>
-
-            <div className="flex justify-between">
-
-              <span>Paid</span>
-
-              <span className="font-bold">
-
-                {Number(
-                  receipt.paid ||
-                  receipt.paid_amount ||
-                  0
-                ).toLocaleString()} UGX
-
-              </span>
-
-            </div>
-            <div className="flex justify-between">
-
-  <span>Cashier</span>
-
-  <span>
-
-    {receipt.user?.name || 'Staff'}
-
-  </span>
-
-</div>
-<div className="flex justify-between">
-
-  <span>Branch</span>
-
-  <span>
-
-    {receipt.branch?.name || 'Main'}
-
-  </span>
-
-</div>
-<div className="flex justify-between">
-
-  <span>Items</span>
-
-  <span>
-
-    {receipt.items?.reduce(
-      (sum, item) =>
-        sum + Number(item.quantity),
-      0
-    )}
-
-  </span>
-
-</div>
-
-            <div className="flex justify-between text-emerald-700">
-
-              <span>Change</span>
-
-              <span className="font-bold">
-
-                {Number(
-                  receipt.change || 0
-                ).toLocaleString()} UGX
-
-              </span>
-
-            </div>
-
-          </div>
-
-          <div className="border-t border-dashed border-black my-3"></div>
-
-          {/* FOOTER */}
-
-          <div className="text-center">
-
-            <p className="font-bold">
-
-              THANK YOU
-
-            </p>
-
-            <p className="text-xs text-slate-500">
-
-              Please Come Again
-
-            </p>
-
-          </div>
-
+          </span>
         </div>
 
-        {/* BUTTONS */}
-
-        <div className="grid grid-cols-2">
-
-          <button
-            onClick={onClose}
-            className="py-4 border-r font-bold hover:bg-slate-100"
-          >
-            Close
-          </button>
-
-          <button
-            onClick={printReceipt}
-            className="py-4 bg-emerald-600 text-white font-bold hover:bg-emerald-700"
-          >
-            Print Receipt
-          </button>
-
+        <div class="row bold">
+          <span>TOTAL</span>
+          <span>${Number(receipt.total || 0).toLocaleString()}</span>
         </div>
 
+        <div class="row bold">
+          <span>PAID</span>
+          <span>
+            ${Number(
+              receipt.paid_amount || receipt.paid || receipt.total || 0
+            ).toLocaleString()}
+          </span>
+        </div>
+
+        <div class="row bold">
+          <span>CHANGE</span>
+          <span>${Number(receipt.change || 0).toLocaleString()}</span>
+        </div>
+
+        <div class="line"></div>
+
+        <div class="center">
+          THANK YOU<br/>
+          PLEASE COME AGAIN
+        </div>
       </div>
+    </body>
+    </html>
+    `;
 
-    </div>
+    const printWindow = window.open('', 'PRINT', 'height=600,width=400');
 
-  );
+    if (!printWindow) {
+      console.error('Popup blocked');
+      return;
+    }
 
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+
+      if (onClose) {
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+      }
+    }, 500);
+  }, [receipt, onClose]);
+
+  return null;
 }

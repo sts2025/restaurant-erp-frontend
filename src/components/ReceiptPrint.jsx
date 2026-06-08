@@ -1,182 +1,111 @@
-import ThermalReportLayout
-from './ThermalReportLayout';
+import ThermalReportLayout from './ThermalReportLayout';
 
-export default function ReceiptPrint({
+/**
+ * ReceiptPrint
+ *
+ * FIX: Branch address and phone now come from sale.branch
+ * which is loaded by SaleController.show() via the branch relation.
+ * No more hardcoded address or phone numbers.
+ *
+ * Make sure SaleController.show() loads the branch relation:
+ *   Sale::with(['items.product', 'user', 'branch'])->...
+ */
+export default function ReceiptPrint({ sale }) {
+  if (!sale) return null;
 
-  sale
-
-}) {
-
-  if (!sale)
-    return null;
+  const branch  = sale.branch  || {};
+  const address = branch.address || branch.location || '';
+  const phone   = branch.phone   || '';
+  const branchName = branch.name || 'Main Branch';
 
   return (
+    <ThermalReportLayout title={branchName}>
 
-    <ThermalReportLayout
-      title="Customer Receipt"
-    >
+      {/* BRANCH CONTACT DETAILS — from database, not hardcoded */}
+      {address && (
+        <div className="thermal-center thermal-small">{address}</div>
+      )}
+      {phone && (
+        <div className="thermal-center thermal-small">{phone}</div>
+      )}
+
+      <div className="thermal-divider" />
 
       {/* RECEIPT INFO */}
-      <div className="
-        thermal-small
-      ">
-
-        Receipt:
-        {' '}
-        {sale.receipt_number}
-
+      <div className="thermal-small">
+        Receipt: {sale.receipt_number}
       </div>
-
-      <div className="
-        thermal-small
-      ">
-
-        {new Date(
-          sale.created_at
-        ).toLocaleString()}
-
+      <div className="thermal-small">
+        {new Date(sale.created_at).toLocaleString()}
       </div>
+      {sale.table?.name && (
+        <div className="thermal-small">
+          Table: {sale.table.name}
+        </div>
+      )}
+      {sale.user?.name && (
+        <div className="thermal-small">
+          Cashier: {sale.user.name}
+        </div>
+      )}
 
-      <div className="
-        thermal-divider
-      " />
+      {sale.is_reprint && (
+        <div className="thermal-center thermal-bold" style={{ color: 'red' }}>
+          *** REPRINT COPY ***
+        </div>
+      )}
+
+      <div className="thermal-divider" />
 
       {/* ITEMS */}
       {sale.items?.map((item) => (
-
-        <div
-          key={item.id}
-          className="
-            thermal-section
-          "
-        >
-
-          <div className="
-            thermal-row
-          ">
-
-            <span>
-
-              {item.product?.name}
-
-            </span>
-
-            <span>
-
-              {(item.quantity * item.price)
-                .toLocaleString()}
-
-            </span>
-
+        <div key={item.id} className="thermal-section">
+          <div className="thermal-row">
+            <span>{item.product?.name || 'Item'}</span>
+            <span>{Number(item.quantity * item.price).toLocaleString()}</span>
           </div>
-
-          <div className="
-            thermal-small
-          ">
-
-            {item.quantity}
-            {' x '}
-            {Number(item.price)
-              .toLocaleString()}
-
+          <div className="thermal-small">
+            {item.quantity} x {Number(item.price).toLocaleString()}
           </div>
-
         </div>
-
       ))}
 
-      <div className="
-        thermal-divider
-      " />
+      <div className="thermal-divider" />
 
-      {/* TOTAL */}
-      <div className="
-        thermal-row
-        thermal-bold
-      ">
-
-        <span>
-          TOTAL
-        </span>
-
-        <span>
-
-          {Number(
-            sale.total
-          ).toLocaleString()}
-          {' '}
-          UGX
-
-        </span>
-
+      {/* TOTALS */}
+      <div className="thermal-row thermal-bold">
+        <span>TOTAL</span>
+        <span>{Number(sale.total).toLocaleString()} UGX</span>
       </div>
 
-      {/* PAID */}
-      <div className="
-        thermal-row
-      ">
-
-        <span>
-          PAID
-        </span>
-
-        <span>
-
-          {Number(
-            sale.paid
-          ).toLocaleString()}
-          {' '}
-          UGX
-
-        </span>
-
+      <div className="thermal-row">
+        <span>PAID</span>
+        <span>{Number(sale.paid).toLocaleString()} UGX</span>
       </div>
 
-      {/* CHANGE */}
-      <div className="
-        thermal-row
-      ">
+      <div className="thermal-row">
+        <span>CHANGE</span>
+        <span>{Number(sale.change || 0).toLocaleString()} UGX</span>
+      </div>
 
+      <div className="thermal-row">
+        <span>ITEMS</span>
         <span>
-          CHANGE
+          {sale.items?.reduce((sum, item) => sum + Number(item.quantity), 0)}
         </span>
-
-        <span>
-
-          {Number(
-            sale.change
-          ).toLocaleString()}
-          {' '}
-          UGX
-
-        </span>
-
       </div>
 
-      <div className="
-        thermal-divider
-      " />
+      <div className="thermal-divider" />
 
-      {/* PAYMENT */}
-      <div className="
-        thermal-center
-      ">
+      {/* PAYMENT METHOD */}
+      <div className="thermal-center">{sale.payment_method}</div>
 
-        {sale.payment_method}
+      <div className="thermal-divider" />
 
-      </div>
-
-      <div className="
-        thermal-center
-        thermal-small
-      ">
-
-        Thank you
-
-      </div>
+      {/* FOOTER */}
+      <div className="thermal-center thermal-bold">THANK YOU</div>
+      <div className="thermal-center thermal-small">Please Come Again</div>
 
     </ThermalReportLayout>
-
   );
-
 }

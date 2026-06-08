@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ShoppingBag, Settings, WifiOff, Wifi } from 'lucide-react';
-
 import POSView from './components/POSView';
 import AdminView from './components/AdminView';
 import TableSelection from './components/TableSelection';
@@ -10,8 +9,7 @@ import KitchenTicket from './components/KitchenTicket';
 import ShiftReportPrint from './components/ShiftReportPrint';
 import BarTicket from "./components/BarTicket";
 
-
-axios.defaults.baseURL = 'https://restoapi.agileaccounts.me/api';
+axios.defaults.baseURL = 'http://127.0.0.1:8000/api';
 axios.defaults.headers.common['Accept'] = 'application/json';
 
 export default function App() {
@@ -39,7 +37,6 @@ export default function App() {
   // =========================
   useEffect(() => {
     if (!user) return;
-
     if (user.role === 'cashier') setView('pos');
     if (user.role === 'waiter') setView('waiter');
     if (user.role === 'kitchen') setView('kitchen');
@@ -48,6 +45,7 @@ export default function App() {
 
   const [data, setData] = useState({ products: [] });
   const [cart, setCart] = useState([]);
+  const [tableOrders, setTableOrders] = useState({});
   const [selectedTable, setSelectedTable] = useState(null);
   const [amountPaid, setAmountPaid] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -66,31 +64,33 @@ export default function App() {
   const [receipt, setReceipt] = useState(null);
   const [tables, setTables] = useState([]);
   const [cashAmount, setCashAmount] = useState(0);
-  const [orderNotes, setOrderNotes] =useState('');
+  const [orderNotes, setOrderNotes] = useState('');
   const [billData, setBillData] = useState(null);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeTableId, setMergeTableId] = useState('');
 
   // =========================
+  // CORE: SWITCH TABLE LOGIC
+  // =========================
+  const switchTable = (table) => {
+    // Save current table's cart (if any table is selected)
+    if (selectedTable) {
+      setTableOrders(prev => ({
+        ...prev,
+        [selectedTable.id]: cart
+      }));
+    }
+
+    // Switch to new table
+    setSelectedTable(table);
+
+    // Load the new table's saved cart (or empty array)
+    setCart(tableOrders[table.id] || []);
+  };
+
+  // =========================
   // TOTALS
   // =========================
-
-useEffect(() => {
-
-  if (!billData) return;
-
-  const timer = setTimeout(() => {
-
-    window.print();
-
-  }, 500);
-
-  return () => clearTimeout(timer);
-
-}, [billData]);
-
-
-
   const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
   const total = Math.max(0, subtotal - Number(discount || 0));
   const change = Math.max(0, Number(amountPaid || 0) - total);
@@ -138,37 +138,23 @@ useEffect(() => {
   };
 
   const mergeTables = async (targetTableId) => {
+    if (!selectedTable) {
+      alert('No table selected');
+      return;
+    }
 
-  if (!selectedTable) {
-    alert('No table selected');
-    return;
-  }
-
-  try {
-
-    await axios.post(
-      '/tables/merge',
-      {
+    try {
+      await axios.post('/tables/merge', {
         source_table_id: selectedTable.id,
         target_table_id: targetTableId
-      }
-    );
-
-    await loadTables();
-
-    setShowMergeModal(false);
-
-    alert('Tables merged successfully');
-
-  } catch (error) {
-
-    alert(
-      error.response?.data?.message ||
-      'Merge failed'
-    );
-
-  }
-};
+      });
+      await loadTables();
+      setShowMergeModal(false);
+      alert('Tables merged successfully');
+    } catch (error) {
+      alert(error.response?.data?.message || 'Merge failed');
+    }
+  };
 
   // =========================
   // TABLE TRANSFER FUNCTIONS
@@ -206,27 +192,22 @@ useEffect(() => {
   // =========================
   // BILL & RECEIPT FUNCTIONS
   // =========================
-const printBill = () => {
-
-  console.log("CART", cart);
-
-  setBillData({
-    table: selectedTable?.name || 'Takeaway',
-    items: cart,
-    total,
-    notes: orderNotes,
-    printedAt: new Date()
-  });
-
-};
+  const printBill = () => {
+    setBillData({
+      table: selectedTable?.name || 'Takeaway',
+      items: cart,
+      total,
+      notes: orderNotes,
+      printedAt: new Date()
+    });
+  };
 
   useEffect(() => {
-    if (receipt) {
-      const timer = setTimeout(() => {
-        setReceipt(null);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
+    if (!receipt) return;
+    const timer = setTimeout(() => {
+      setReceipt(null);
+    }, 8000);
+    return () => clearTimeout(timer);
   }, [receipt]);
 
   const openSplitBill = () => {
@@ -261,14 +242,6 @@ const printBill = () => {
 
     setHeldOrders([...heldOrders, heldOrder]);
     setCart([]);
-    setSelectedTable(null);
-    setTables(prev =>
-      prev.map(t =>
-        t.id === selectedTable.id
-          ? { ...t, status: 'available' }
-          : t
-      )
-    );
     alert('Order held successfully!');
   };
 
@@ -312,7 +285,6 @@ const printBill = () => {
   const loadTables = async () => {
     try {
       const res = await axios.get('/tables');
-      console.log('TABLE RESPONSE:', res.data);
       setTables(Array.isArray(res.data) ? res.data : res.data.data || []);
     } catch (err) {
       console.error('Failed to load tables:', err);
@@ -443,7 +415,7 @@ const printBill = () => {
           payment_method: paymentMethod,
           change,
           table: selectedTable ? { name: selectedTable.name } : null,
-          cashier: user ? { name: user.name } : null,
+          user: user ? { name: user.name } : null,
           is_offline: true
         };
 
@@ -457,11 +429,10 @@ const printBill = () => {
           setTables(prev =>
             prev.map(t =>
               t.id === selectedTable.id
-                ? { ...t, status: 'available' }
+                ? { ...t, status: 'occupied' }
                 : t
             )
           );
-          setSelectedTable(null);
         }
 
         setIsProcessing(false);
@@ -469,10 +440,22 @@ const printBill = () => {
       }
 
       const res = await axios.post('/sales', payload);
-      console.log('SALE RESPONSE:', res.data);
 
       if (res.data.receipt) {
-        setReceipt(res.data.receipt);
+        const sale = res.data.receipt;
+        setReceipt(sale);
+
+        const queue = [
+          { type: 'receipt', data: sale }
+        ];
+
+        if (sale.items?.some(i => i.product?.preparation_area === 'kitchen')) {
+          queue.push({ type: 'kitchen', data: sale });
+        }
+
+        if (sale.items?.some(i => i.product?.preparation_area === 'bar')) {
+          queue.push({ type: 'bar', data: sale });
+        }
       }
 
       setCart([]);
@@ -484,32 +467,30 @@ const printBill = () => {
         setTables(prev =>
           prev.map(t =>
             t.id === selectedTable.id
-              ? { ...t, status: 'available' }
+              ? { ...t, status: 'occupied' }
               : t
           )
         );
-        setSelectedTable(null);
       }
     } catch (err) {
       console.error('CHECKOUT ERROR:', err);
 
       if (err.response) {
-        console.log(err.response.data);
         alert(err.response.data.message || JSON.stringify(err.response.data.errors || err.response.data));
       } else if (err.request) {
-      const payload = {
-  items: cart.map(i => ({
-    product_id: i.id,
-    quantity: i.quantity,
-    price: i.price
-  })),
-  paid_amount: paid,
-  payment_method: paymentMethod,
-  discount: discount,
-  notes: orderNotes,
-  table_id: selectedTable?.id || null,
-  shift_id: activeShift.id
-};
+        const payload = {
+          items: cart.map(i => ({
+            product_id: i.id,
+            quantity: i.quantity,
+            price: i.price
+          })),
+          paid_amount: paid,
+          payment_method: paymentMethod,
+          discount: discount,
+          notes: orderNotes,
+          table_id: selectedTable?.id || null,
+          shift_id: activeShift.id
+        };
         saveOfflineSale(payload);
         alert('⚠️ Network error. Sale has been saved offline and will sync when connection is restored.');
 
@@ -542,11 +523,10 @@ const printBill = () => {
           setTables(prev =>
             prev.map(t =>
               t.id === selectedTable.id
-                ? { ...t, status: 'available' }
+                ? { ...t, status: 'occupied' }
                 : t
             )
           );
-          setSelectedTable(null);
         }
       } else {
         alert('Error: ' + err.message);
@@ -590,11 +570,9 @@ const printBill = () => {
     if (amount === null) return;
 
     try {
-      console.log('Opening shift...');
       const res = await axios.post('/shifts/open', {
         starting_cash: Number(amount)
       });
-      console.log('SHIFT OPEN RESPONSE:', res.data);
       setActiveShift(res.data);
       fetchShift();
       alert('Shift opened successfully');
@@ -626,7 +604,6 @@ const printBill = () => {
       localStorage.setItem('pos_token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(res.data.data.user);
-      console.log('Logged in user:', res.data.data.user);
       setEmail('');
       setPassword('');
     } catch (err) {
@@ -659,18 +636,13 @@ const printBill = () => {
   // =========================
   // EFFECTS
   // =========================
-
   useEffect(() => {
-
-  if (!billData) return;
-
-  const timer = setTimeout(() => {
-    window.print();
-  }, 500);
-
-  return () => clearTimeout(timer);
-
-}, [billData]);
+    if (!billData) return;
+    const timer = setTimeout(() => {
+      window.print();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [billData]);
 
   useEffect(() => {
     const token = localStorage.getItem('pos_token');
@@ -682,7 +654,6 @@ const printBill = () => {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     axios.get('/me')
       .then((res) => {
-        console.log('User data from /me:', res.data);
         setUser(res.data.data);
       })
       .catch(() => {
@@ -771,9 +742,7 @@ const printBill = () => {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900">
         <div className="bg-white p-8 rounded-2xl w-[400px] shadow-2xl">
-          <h1 className="text-2xl font-bold mb-6 text-center">
-            Restaurant POS Login
-          </h1>
+          <h1 className="text-2xl font-bold mb-6 text-center">Restaurant POS Login</h1>
 
           <form onSubmit={handleLogin}>
             <input
@@ -843,8 +812,7 @@ const printBill = () => {
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-auto">
         {(!isOnline || pendingSyncCount > 0) && (
-          <div className={`sticky top-0 z-40 px-4 py-2 text-center text-white font-medium ${!isOnline ? 'bg-red-600' : 'bg-yellow-600'
-            }`}>
+          <div className={`sticky top-0 z-40 px-4 py-2 text-center text-white font-medium ${!isOnline ? 'bg-red-600' : 'bg-yellow-600'}`}>
             {!isOnline ? (
               <div className="flex items-center justify-center gap-2">
                 <WifiOff className="w-4 h-4" />
@@ -884,7 +852,8 @@ const printBill = () => {
                 total={total}
                 change={change}
                 orderNotes={orderNotes}
-
+                printKitchenTicket={() => {}}
+                printBarTicket={() => {}}
                 setOrderNotes={setOrderNotes}
                 activeShift={activeShift}
                 openShift={openShift}
@@ -919,15 +888,11 @@ const printBill = () => {
                 showMergeModal={showMergeModal}
                 setShowMergeModal={setShowMergeModal}
                 mergeTables={mergeTables}
-
-
-
-
               />
             ) : (
               <TableSelection
                 tables={tables}
-                onSelectTable={setSelectedTable}
+                onSelectTable={switchTable}
               />
             )
           ) : (
@@ -1033,17 +998,11 @@ const printBill = () => {
       {/* RECEIPTS & TICKETS */}
       {receipt && (
         <>
-          <Receipt receipt={receipt} />
-          {receipt.items?.some(item => item.product?.preparation_area === 'kitchen') && (
-            <KitchenTicket receipt={receipt} />
-          )}
-          {receipt.items?.some(item => item.product?.preparation_area === 'bar') && (
-            <BarTicket receipt={receipt} />
-          )}
+          <Receipt receipt={receipt} onClose={() => setReceipt(null)} />
+          <KitchenTicket receipt={receipt} />
+          <BarTicket receipt={receipt} />
         </>
       )}
-
-      
 
       {shiftReport && closedShift && (
         <ShiftReportPrint
